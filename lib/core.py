@@ -1,6 +1,6 @@
 '''
 	@author Daniel Victor Freire Feitosa
-	@version 1.0.1
+	@version 2.0.0
 	@license PL (private license)
 	@copyrights All rights reserved to Daniel Victor Freire Feitosa - 2018
 '''
@@ -13,17 +13,23 @@ except ImportError:
 	print('module "requests" is needed try: python -m pip install requests and try run again')
 	osexit(1)
 
+try:
+	import dukpy
+except ImportError:
+	print('module "dukpy" is needed try: python -m pip install dukpy and try run again')
+	osexit(1)
+
 from threading import Thread
 
 ''' WebCompyler is a tool to decrease your JS and CSS codes '''
 class WebCompyler(Thread):
 
 	__author__ = 'Daniel Victor Freire Feitosa'
-	__version__ = '1.0.0'
-	__license__ = 'PL'
+	__version__ = '2.0.0'
+	__license__ = 'GPL 3.0 (General Public License 3.0)'
 	__github__ = 'https://github.com/proxyanon'
 
-	def __init__(self, webpath, compile_js=True, compile_css=True, excludes=['xml', 'scss', 'jsx', 'ts', 'txt'], verbose=False):
+	def __init__(self, webpath, compile_js=True, compile_css=True, backup=True, excludes=['xml', 'scss', 'jsx', 'ts', 'txt', 'json', 'htaccess', 'h5'], verbose=False):
 
 		Thread.__init__(self)
 		self.api = {'css': 'https://cssminifier.com/raw', 'js': 'https://javascript-minifier.com/raw'}
@@ -31,6 +37,7 @@ class WebCompyler(Thread):
 		self.webpath = webpath
 		self.compile_js = compile_js
 		self.compile_css = compile_css
+		self.backup = backup
 
 		self.excludes = excludes
 		self.ioupdates = ['html', 'php']
@@ -60,17 +67,21 @@ class WebCompyler(Thread):
 	def compress(self, read, _type):
 
 		if self.running:
-			
 			try:
+				if _type == 'js':
+					read = dukpy.babel_compile(read)['code']
+				else:
+					read = read
 				data = {'input': read}
+
 				r = post(self.api[_type], data=data)
 				if 'Error' in r.text:
 					return read.strip()
 				return r.text
 			except:
 				
-				if self.verbose:
-					print('[x] Error in compress verify your connection (exception: {0}) ...'.format(err))
+				if self.verbose and self.running:
+					print('[x] Error in compress verify your connection ...')
 					self.running = False
 				
 				return read
@@ -78,7 +89,7 @@ class WebCompyler(Thread):
 	''' create the backup to develop '''
 	def IOBakcup(self):
 
-		if self.running:
+		if self.running and self.backup:
 			
 			if self.verbose:
 				print('[+] Creating a backup ...')
@@ -171,16 +182,22 @@ class WebCompyler(Thread):
 				if self.verbose:
 					print('[+] Compressing js ...')
 
-				js_compresseds = [{'realpath': paths, 'file': file.replace('.js', '.min.js'), 'compressed': self.compress(open('{0}/{1}'.format(paths, file), 'r').read(), 'js'), 'removed': remove('{0}/{1}'.format(paths, file))} for paths,dirs,files in walk(self.webpath) for file in files if '.js' in file and '.min' not in file if self.running]
-				handles = [open('{0}/{1}'.format(js['realpath'], js['file']), 'w').write(js['compressed']) for js in js_compresseds]
+				try:
+					js_compresseds = [{'realpath': paths, 'file': file.replace('.js', '.min.js'), 'compressed': self.compress(open('{0}/{1}'.format(paths, file), 'r').read(), 'js'), 'to_remove': '{0}/{1}'.format(paths, file)} for paths,dirs,files in walk(self.webpath) for file in files for exclude in self.excludes if 'js' == file.split('.')[len(file.split('.'))-1] and 'min' not in file if self.running if self.compile_js and exclude not in file]
+					handles = [{'writed': open('{0}/{1}'.format(js['realpath'], js['file']), 'w').write(js['compressed']), 'removed': remove(js['to_remove'])} for js in js_compresseds]
+				except:
+					pass
 
 			if self.compile_css:
 
 				if self.verbose:
 					print('[+] Compressing css ...')
 				
-				css_compresseds = [{'realpath': paths, 'file': file.replace('.css', '.min.css'), 'compressed': self.compress(open('{0}/{1}'.format(paths, file), 'r').read(), 'css'), 'removed': remove('{0}/{1}'.format(paths, file))} for paths,dirs,files in walk(self.webpath) for file in files if '.css' in file and '.min' not in file if self.running]
-				handles = [open('{0}/{1}'.format(css['realpath'], css['file']), 'w').write(css['compressed']) for css in css_compresseds]
+				try:
+					css_compresseds = [{'realpath': paths, 'file': file.replace('.css', '.min.css'), 'compressed': self.compress(open('{0}/{1}'.format(paths, file), 'r').read(), 'css'), 'to_remove': '{0}/{1}'.format(paths, file)} for paths,dirs,files in walk(self.webpath) for file in files for exclude in self.excludes if 'css' == file.split('.')[len(file.split('.'))-1] in file and 'min' not in file if self.running if self.compile_css and exclude not in file]
+					handles = [{'writed': open('{0}/{1}'.format(css['realpath'], css['file']), 'w').write(css['compressed']), 'removed': remove(css['to_remove'])} for css in css_compresseds]
+				except:
+					pass
 
 	''' main function '''
 	def run(self):
